@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Queue Number System</title>
+<!--
+  Queue Number System  |  bench build
+  Static front end over core.js, which holds the whole dataset locally. No network.
+
+  PORTED, not rewritten. This file was copied byte for byte from the original and then
+  edited in place. The change history below is kept verbatim because it is the record of
+  why the code is shaped as it is; three features named in it are GONE from this build and
+  are marked [REMOVED] where they appear. The removals are the login screen, the
+  build-currency/stale-tab check, and every reach across the network.
+
+  Build state: v0.23  -  [REMOVED] THE STALE TAB. chemists leave Chrome open and keep running
+                         last week's build, and every deploy costs a round of chasing people to
+                         Ctrl+Shift+R. NOT a cache problem, which is why nothing here touches cache
+                         headers: an open tab makes no request at all, so no header and no
+                         cache-buster at deploy time can reach it, and Pages gives no header control
+                         regardless. On focus, on visibilitychange and every fifteen minutes, a 4 KB
+                         Range read with cache:'no-store' compares the server's build line against
+                         BUILD_ID. Banner with Reload and Later, never an automatic reload: somebody
+                         half way through reserving a lot number would lose the form. Silent when
+                         the fetch fails, because "could not check" is noise on a strip whose whole
+                         job is to be ignorable. Not gated on auth: a tab sitting signed out
+                         overnight is still stale. THIS FILE'S VERSION HAS NO PATCH DIGIT, v0.22 and
+                         not v0.22.0, so the pattern must not require three parts; a snippet copied
+                         whole from the schedule tool would match nothing, never fire, and look exactly like
+                         "no new build" forever. Third and last of the three tools to get this, so
+                         this deploy is the last one that needs chasing.
+                         NOTE, 30/08/26: rebuilt from the v0.22 base after the 06/08/26 working copy
+                         was lost. Every edit came from the session record, checkers and mutations
+                         re-run green. Functionally the 06/08/26 build, not guaranteed
+                         byte-identical to what was deployed, so REDEPLOY rather than assume.
+  Build state: v0.22  -  THE LEAVER LEVER. people.roster_until read off team_members(), a third
+                         roster map (teamOn), and three surfaces filtered on it: the board seed,
+                         the owner dropdown and its escape. Frontend only; the column landed on
+                         prod 31/07/26.
+  ---------------------------------------------------------------------------------------------
+  THIS LINE IS THE HEAD, and it was wrong for the whole of v0.22. It read v0.21 while the change
+  history below carried a v0.22 entry and the body carried v0.22's code. Corrected 02/08/26 in
+  place, no version bump: the fault was the label, not the build. Third time the head-line rule
+  has failed across the suite and the first that nothing caught, because this was the file with
+  no checker. queue_checks.cjs now asserts mechanically that the head line is the highest
+  version this header names.
+  ---------------------------------------------------------------------------------------------
+  v0.21  -  Type and state filters on the Lots and Lab Reports tabs. Client-side view over loaded data, no backend change.
+  v0.20  -  Home link added to the header (anchor to ../index.html) so users can return to the hub. [REMOVED: no hub on the bench.]
+  v0.19  -  Release on a revised LR (revision > 1) now UNDOES the revision (restores the prior revision from archive), not deletes the number. Button relabelled "Undo revision".
+  [REMOVED] Pointed at PROD (ACTIVE_ENV = 'prod'). The bench has one local dataset and no environments.
+  Change history:
+    v0.1  Step 1. Shell, the client, password gate, read smoke test.
+    v0.2  Step 2. Env switch + banner. Lots + LR read views, TSV.
+    v0.2a/b  Lots sort largest-first; labels + GMT+8 datetime.
+    v0.3  Step 3 chunk 1. Magic-link login, whoami() identity, authenticated reads.
+    v0.4  Step 3 chunk 2. Claim forms (reserve_lot / reserve_lr), owner auto-tagged.
+    v0.5  Step 3 chunk 3. Per-row Edit (update_lot / update_lr, all fields incl
+          owner) and Release (release_lot / release_lr, with guard errors shown).
+          Use Test checkbox and Type now two-way linked. Toast lingers 10s.
+    v0.6  Untick Use Test now clears the LR Ref (was leaving the stale self-ref,
+          stranding the lot). Backdrop click no longer closes a modal (Cancel /
+          Esc only). LR table: "Date" -> "Date approved", new "Reserved" column
+          (created_at) mirrored into the LR TSV.
+    v0.7  Login switched from magic link to 6-digit email OTP code. Sidesteps
+          corporate safe-link scanners that pre-consume one-time link tokens.
+          signInWithOtp drops emailRedirectTo; new verifyOtp step. Requires the
+          Magic Link email template to render {{ .Token }} (set on prod 14/06/26).
+    v0.7a Code box accepts the real OTP length (prod issues 8 digits, not 6);
+          client check now length-agnostic (6-10), server is source of truth.
+    v0.8  Matches the pre-rollout migration. update_lot now 10-arg (d1/d2/d3).
+          UT lots show d1/d2/d3 columns and a lifecycle pill (Open / QC pending /
+          Frozen). Edit narrows to d3-only in life two, gone when frozen. Edit /
+          Release shown only to the owner or admin (caller_is_admin at login).
+          Lock state is enforced server-side; the page only mirrors it.
+    v0.9  Roster read moved from the team_members view to rpc('team_members'),
+          a caller_code()-gated function (clears the Security Definer View
+          advisor; needs the v0.9 backend Part A live first). d1/d2/d3 column
+          headers gain hover tooltips. New in-app Help button beside Refresh.
+    v0.10 Login switched from email OTP to email + password (signInWithPassword).
+    v0.11 Active-aware roster: departed names persist on their rows, assignment
+          dropdown active-only, an inactive current owner stays selectable per row.
+    v0.12 LR revision. Locked LRs gain a Revise action (owner or admin): the current
+          approved revision is snapshotted to lab_reports_archive, then the row is
+          bumped in place (revision +1, approval cleared so it reopens, owner
+          reassignable). lr_display recomputes via the generated column. Backend:
+          revise_lr() definer fn + lab_reports_archive table (migration applied to
+          prod). Re-approval through Edit re-locks, as before. Revise workflow text
+          lives in Help, not the dialog. Identifier nudge reworded and shown red.
+    v0.13 Non-UT lots gain an experiment window: experiment_start (work begun) and
+          experiment_end (work done, locks the lot, mirrors d2). Closes the gap where
+          a current-year non-UT lot with no LR could never lock. Lock rule +clause;
+          single contextual Dates column replaces d1/d2/d3 columns (UT shows d-dates,
+          others show start/end). Edit dialog shows the right date block per lot type.
+          Guards: end > start, neither date in the future (server-enforced, dialog
+          max=today). Backend: lots +experiment_start/end, 3 check constraints,
+          update_lot now 12-arg (the two dates default null for back-compat).
+          OTP flow removed; corporate filtering blocks the code emails. New
+          "Change password" control in the header (updateUser, on own session).
+          Accounts are provisioned and reset from the Supabase dashboard.
+    v0.14 Lock rule decoupled from the calendar. The year-rollover clause (lot.year
+          != current year) is replaced by an explicit `frozen` flag, set once on the
+          migrated 2025 rows. 2026 lots no longer force-freeze on 01/01/27; they lock
+          only on real signals (LR, experiment_end, UT d2) or the flag. Matches the
+          prod migration that also corrected lot_is_locked, which had been comparing
+          the 2-digit year column to the 4-digit calendar year and so locked every
+          2026 lot server-side (non-UT edits and releases all bounced). lotLocked now
+          reads lot.frozen; `frozen` added to the lots select. sgtYear2() kept (now
+          unused here) to avoid churn.
+    v0.15 The admin account filtered out of all owner dropdowns (claim / edit /
+          reassign) via a single guard in ownerOptions(). It is admin-only and is
+          never an assignable bench owner. A row already owned by the admin (set
+          directly, never through this page) still renders its owner, so the filter
+          cannot strand a row. No seam guard: an admin-owned row is still permitted
+          so the admin can hold a deliberate test lot.
+    v0.16 New "Open items" tab, set as the landing tab (page opens on it). Per-person
+          board: Name, Code, Lots open, Lots closed, LR open, LR closed. Active team
+          only, the admin excluded. Open = not locked (lotLocked / lrLocked), closed =
+          locked; frozen rows count closed. Sorted by total open (lots open + LR
+          open) descending, code as tie-break. Whole active team is listed (zeros
+          sink to the bottom). Pure view over already-loaded data, no new query.
+    v0.19 Fixed a destructive path in Release on a revised LR. revise_lr bumps the
+          row in place (revision+1, date cleared) and archives the prior revision, so
+          a revised LR shows Edit/Release while unsigned. The old Release deleted that
+          row outright, dissolving the whole LR number (incl. the signed prior
+          revision, which survived only as an archive snapshot) and freeing the number
+          to recycle. release_lr now branches: revision > 1 restores the highest
+          archived revision onto the live row and deletes that archive row (number
+          kept, logged scope 'lr_revision_undo'); revision = 1 behaves as before
+          (log + delete + free). Repeatable: R03->R02->R01, then Release at R01 is the
+          real delete. Frontend: the button reads "Undo revision" on revision > 1 with
+          a rollback confirm dialog, "Release" on revision 1. Backend migration applied
+          to prod. KNOWN GAP (backlog): revise_lr does not archive the standalone flag
+          (column predates v0.18), so an undo cannot restore a standalone value that
+          was toggled during the open revision window.
+    v0.18 LR-lock enforcement + standalone flag. On writing a non-UT lot's LR Ref:
+          the ref must exist in the register, its product must match the lot, and the
+          LR must be open (unsigned). Three server checks in update_lot, mirrored
+          client-side in the lot edit dialog. LRs gain a standalone flag (set at
+          claim, editable while open): a two-way sign gate rejects signing a
+          non-standalone LR with zero lots, or a standalone LR with lots linked.
+          Backend: reserve_lr 4-arg, update_lr 7-arg (standalone), update_lot 12-arg
+          (ref checks, no signature change).
+    v0.17 Board trimmed: columns now Name, Code, Lots open, LR open (closed columns
+          dropped), all cells centred, intro meta line removed. Sort unchanged
+          (total open descending). Closed counts no longer computed.
+    v0.11 team_members() now returns active. Owner-name map built from the full
+          roster, so a departed (inactive) person's name still renders on their
+          existing rows. Assignment dropdown filtered to active members; an
+          inactive current owner is kept and marked "(inactive)" so a reassign
+          still shows who holds it. Pairs with the active-flag backend migration.
+    v0.20 Home link in the header (anchor to ../index.html), returns to the hub.
+    v0.21 Filters. Lots tab gains Type + state (All / Open / QC pending / Locked,
+          the three lotLife() states as a partition, labels matching the row pills).
+          Lab Reports tab gains Type + state (All / Open / Locked, on lrLocked()).
+          Filtering folded into the row selectors, not the render bodies: lotRows()
+          now applies both filters, and a new lrRows() takes over the year filter
+          that was duplicated inline in renderLRs() and copyLrsTsv(). Copy as TSV
+          therefore inherits the filter (filtered view = filtered paste). Type
+          options = active types plus any legacy value present in the data, so an
+          inactive type on an old row stays reachable. Subtab counts stay
+          unfiltered (product / year totals); the meta line reads "12 of 34" when
+          a filter bites. Filter state lives in APP (survives Refresh, resets on
+          page load), not localStorage. Active selects render in accent. No
+          server call, no schema change.
+    v0.22 THE LEAVER LEVER. people.roster_until (prod 31/07/26), a date, null
+          meaning current member, and it is the LAST DAY they should see the
+          tools: normally the last day in the lab, not the last day of service.
+          WHY NOT active. active=false is POSTURE 2, the trainee or the person on
+          long absence, and the queue already blocks their writes at the seam. A
+          leaver is different in kind: they should not be OFFERED at all. One
+          flag cannot mean two things, so the second is a second column.
+          NOT A DEFECT YOU COULD SEE. The v0.11 rule below is still correct, and
+          nothing on this page was wrong on 31/07/26. But offboarding now sets a
+          DATE and deliberately leaves active alone, so a leaver reads active=TRUE
+          with a past date, and every filter keyed on active alone would have kept
+          offering them. Fixed before the next departure rather than after it.
+          THREE SURFACES. The board seeds from teamActive, so a leaver would keep
+          a row reading 0 and 0. The assignment dropdown offered them. And a
+          codeOnTeam helper for anything holding a bare code.
+          WHAT DID NOT CHANGE, and it is the same line the schedule tool holds: APP.team is
+          still built from the FULL roster, so a departed person's name still
+          renders on every lot and LR they hold. Those are frozen GMP records. The
+          v0.11 reasoning stands word for word; only the definition of "departed"
+          got a column of its own.
+          THE ESCAPE IS THE LOAD-BEARING HALF. ownerOptions keeps the current
+          owner whoever they are, so opening a lot held by a leaver to reassign it
+          still shows who holds it. Same escape v0.11 added for inactive owners,
+          one axis along.
+-->
+<!--
+    BACKEND NOTE, v0.22. This page reads roster_until off rpc('team_members'),
+    which carries it since the 31/07/26 rebuild. No new RPC, no new grant, and no
+    change to any write path here: the server-side gates (caller_code,
+    caller_in_roster, caller_is_admin, and the two roster helpers) ALL carry the
+    date term already, so a leaver is refused by the database whatever this page
+    draws. Everything below is display only and cannot grant anything.
+-->
+<script src="seed.js"></script>
+<script src="core.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root, [data-theme="light"] {
+    --bg:#f0f1f4; --bg2:#ffffff; --card:#ffffff; --border:#d0d2da;
+    --text:#1a1d28; --text2:#4a4d5a; --muted:#6a6d7a; --accent:#3a6aee;
+    --accent-dim:rgba(58,106,238,0.08);
+    --ok:#2a9a6a; --error:#c83030; --error-bg:rgba(200,48,48,0.08);
+    --font-body:'IBM Plex Sans',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  [data-theme="dark"] {
+    --bg:#0c0e14; --bg2:#141720; --card:#1a1d28; --border:#2a2d3a;
+    --text:#e2e4ea; --text2:#a0a3b0; --muted:#787b8a; --accent:#4a7cff;
+    --accent-dim:rgba(74,124,255,0.10);
+    --ok:#4ac78b; --error:#ff4a4a; --error-bg:rgba(255,74,74,0.10);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:var(--font-body);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;}
+
+  .banner{position:sticky;top:0;z-index:60;background:#e8a33d;color:#1a1d28;text-align:center;font-family:var(--font-mono);font-size:12px;font-weight:600;padding:7px 12px;letter-spacing:0.5px;}
+  .theme-toggle{font-size:18px;background:none;border:none;cursor:pointer;color:var(--muted);transition:color 0.2s;line-height:1;padding:0;display:inline-flex;align-items:center;}
+  .theme-toggle:hover{color:var(--text);}
+
+  /* [REMOVED] .auth-* rules went with the login screen. */
+
+  #app{display:none;}
+  .header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--bg2);gap:16px;}
+  .header-left{display:flex;flex-direction:column;gap:2px;}
+  .header h1{font-family:var(--font-mono);font-size:15px;font-weight:600;letter-spacing:0.5px;}
+  .header h1 span{color:var(--accent);}
+  .header-sub{font-size:10px;color:var(--muted);font-family:var(--font-mono);}
+  .header-right{display:flex;align-items:center;gap:14px;}
+  .identity{font-family:var(--font-mono);font-size:12px;color:var(--text2);}
+  /* The "Viewing as" picker, the bench's stand-in for signing in. Same two rules in queue.html,
+     console.html and sched.html. */
+  .viewas{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:12px;color:var(--text2);}
+  .viewas select{font-family:var(--font-mono);font-size:12px;padding:4px 6px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;}
+
+  .wrap{max-width:min(1500px, 96vw);margin:0 auto;padding:20px 24px;}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);align-items:center;}
+  .tab{font-family:var(--font-mono);font-size:13px;font-weight:500;padding:10px 18px;cursor:pointer;color:var(--text2);border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+  .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 4px;}
+  .subtab{font-family:var(--font-mono);font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text2);cursor:pointer;}
+  .subtab:hover{border-color:var(--accent);}
+  .subtab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .subtab .count{opacity:0.65;margin-left:6px;}
+
+  .filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 0;}
+  .filters .flabel{font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+  .filters select{font-family:var(--font-mono);font-size:12px;padding:5px 9px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--text2);outline:none;cursor:pointer;}
+  .filters select:hover{border-color:var(--accent);}
+  .filters select:focus{border-color:var(--accent);}
+  .filters select.on{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0;}
+  .meta{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin:8px 0;}
+
+  .btn{font-family:var(--font-mono);font-size:12px;font-weight:500;padding:7px 14px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent);border-radius:6px;cursor:pointer;}
+  .btn:hover{background:var(--accent);color:#fff;}
+  .btn.primary{background:var(--accent);color:#fff;}
+  .btn.primary:hover{opacity:0.9;}
+  .btn:disabled{opacity:0.5;cursor:default;}
+  .link{font-family:var(--font-mono);font-size:11px;background:none;border:none;color:var(--accent);cursor:pointer;padding:2px 4px;}
+  .link:hover{text-decoration:underline;}
+  .link.danger{color:var(--error);}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px;}
+  table.data{border-collapse:collapse;width:100%;font-size:12px;}
+  table.data th,table.data td{border:1px solid var(--border);padding:5px 9px;text-align:left;vertical-align:top;white-space:nowrap;}
+  table.data th{background:var(--accent-dim);color:var(--accent);font-family:var(--font-mono);font-weight:600;position:sticky;top:0;}
+  table.data td.code{font-family:var(--font-mono);}
+  table.data.board th,table.data.board td{text-align:center;}
+  table.data th.dcol,table.data td.dcol{width:62px;}
+  table.data td.lrref{font-family:var(--font-mono);white-space:normal;max-width:118px;overflow-wrap:anywhere;}
+  table.data td.wrap{white-space:normal;min-width:170px;max-width:300px;}
+  .badge{font-family:var(--font-mono);font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);}
+  .lockpill{font-family:var(--font-mono);font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;border:1px solid var(--text2);color:var(--text2);white-space:nowrap;}
+  .lockpill.pending{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+  .lockpill.frozen{border-color:var(--text2);color:var(--text2);}
+
+  .empty{padding:30px;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:13px;}
+  .errbox{font-family:var(--font-mono);font-size:11px;color:var(--error);background:var(--error-bg);border:1px solid var(--error);border-radius:5px;padding:10px 12px;margin-top:8px;white-space:pre-wrap;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px;}
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:10px;max-width:480px;width:100%;padding:22px 24px;max-height:90vh;overflow-y:auto;}
+  .modal-title{font-family:var(--font-mono);font-size:16px;font-weight:600;margin-bottom:3px;}
+  .modal-as{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:16px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-bottom:5px;}
+  .field select,.field textarea,.field input[type=text],.field input[type=date],.field input[type=number]{width:100%;padding:9px 11px;font-family:var(--font-body);font-size:13px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none;}
+  .field textarea{display:block;resize:vertical;min-height:48px;}
+  .field select:focus,.field textarea:focus,.field input:focus{border-color:var(--accent);}
+  .field select:disabled,.field input:disabled{opacity:0.55;}
+  .field.check label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);cursor:pointer;}
+  .field.check input{width:auto;}
+  .nudge{font-family:var(--font-mono);font-size:10px;color:var(--error);margin-top:5px;}
+  .modal-error{font-family:var(--font-mono);font-size:11px;color:var(--error);margin:6px 0;min-height:14px;white-space:pre-wrap;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
+  .toast{position:fixed;top:58px;left:50%;transform:translateX(-50%);background:var(--ok);color:#fff;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;z-index:110;box-shadow:0 6px 20px rgba(0,0,0,0.22);}
+
+  .footer{max-width:1180px;margin:0 auto;padding:24px;font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+  /* [REMOVED] .banner-build rules went with the stale-tab check. */
+</style>
+</head>
+<body>
+
+<!-- [REMOVED] staging banner, build banner, login screen and the unregistered screen. -->
+
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <h1>Queue <span>Number System</span></h1>
+      <div class="header-sub">Lot queue and LR register</div>
+    </div>
+    <div class="header-right">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">&#9728;</button>
+      <label class="viewas" title="Who the tools treat you as. Stands in for signing in; shared by all three tools.">Viewing as <select data-viewas onchange="viewAsChange(this.value)"></select></label>
+      <span class="identity" id="identity"></span>
+      <button class="btn" onclick="resetData()" title="Discard local changes and re-seed">Reset data</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab active" id="tab-board" onclick="switchTab('board')">Open items</button>
+      <button class="tab" id="tab-lots" onclick="switchTab('lots')">Lots</button>
+      <button class="tab" id="tab-lrs" onclick="switchTab('lrs')">Lab Reports</button>
+      <button class="btn" style="margin-left:auto;" onclick="loadAll()">Refresh</button>
+      <button class="btn" onclick="openHelp()">Help</button>
+    </div>
+    <div id="view-board"></div>
+    <div id="view-lots" style="display:none;"></div>
+    <div id="view-lrs" style="display:none;"></div>
+  </div>
+
+  <div class="footer">Bench build &middot; local data only &middot; <span id="storeMode"></span></div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" style="display:none;">
+  <div class="modal" id="modalBody"></div>
+</div>
+<div id="toast" class="toast" style="display:none;"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+// [REMOVED] ENVIRONMENTS, ACTIVE_ENV and ALLOWED_DOMAIN. There is no project to point
+// at and no domain to check: core.js holds the dataset and the identity.
+
+const APP = {
+  me: null, isAdmin: false, team: {}, products: [], lotTypes: [], lrTypes: [],
+  lots: [], lrs: [], errors: {},
+  activeTab: 'board', activeProduct: null, activeYear: 'all',
+  lotFilterType: 'all', lotFilterStatus: 'all', lrFilterType: 'all', lrFilterStatus: 'all',
+  modal: { mode: null, id: null, num: null }
+};
+
+// ---------- theme ----------
+const THEME_KEY = 'tdtools-theme';
+// Guarded, both ways, and this is the file:// requirement rather than defensive habit. A browser
+// may refuse localStorage outright there and THROW on access rather than returning null. This
+// block runs before anything else on the page, so an unguarded read takes the whole page down
+// before core.js is ever asked for a row: a blank page, no error the user can act on, and a theme
+// preference as the cause. core.js already makes this call for the dataset store and reports which
+// mode it landed in; the theme is only a preference, so it fails to the default and says nothing.
+// Identical in index.html, queue.html, console.html and sched.html. If you change one, change all.
+function themeRead(){ try { return localStorage.getItem(THEME_KEY); } catch(e){ return null; } }
+function themeWrite(v){ try { localStorage.setItem(THEME_KEY, v); } catch(e){ /* preference only, never fatal */ } }
+(function(){ const s = themeRead() || 'light'; document.documentElement.setAttribute('data-theme', s); syncThemeIcon(s); })();
+function toggleTheme(){ const c = document.documentElement.getAttribute('data-theme')||'light'; const n = c==='light'?'dark':'light'; document.documentElement.setAttribute('data-theme', n); themeWrite(n); syncThemeIcon(n); }
+function syncThemeIcon(t){ document.querySelector('.theme-toggle').innerHTML = t==='light' ? '&#9728;' : '&#9790;'; }
+
+// [REMOVED] build currency. Nothing is deployed, so no tab can be stale. This block
+// also held the only Date.now() in the file; it goes with it.
+
+// ---------- client ----------
+// core.js is the seam. Same { data, error } shape the callers already handle, so every
+// call site below reads exactly as it did.
+const sb = { rpc: core.rpc, auth: core.auth };
+
+// ============================================================
+// LOGIN  -  [REMOVED]
+// ============================================================
+// signIn, openChangePassword, doChangePassword and signOut went with the screen. The
+// auth SURFACE survives in core.js and is still exercised below: the session is real,
+// identity still gates every write, and queue_checks.cjs still asserts its shape.
+
+// ============================================================
+// AUTH ROUTING
+// ============================================================
+let routedFor = null;
+sb.auth.onAuthStateChange((_e, session) => {
+  if (!session){ routedFor = null; return; }
+  if (session.user.id === routedFor) return;
+  routedFor = session.user.id; routeAuth(session);
+});
+async function routeAuth(session){
+  try {
+    const { data, error } = await sb.rpc('whoami');
+    if (error) throw error;
+    const me = (data && data.length) ? data[0] : null;
+    // whoami is active-only, so posture 2 and 5 land here as well as a leaver: the queue has no
+    // read-only tier and refuses all three outright, as the original did. The toast is the
+    // port's stand-in for the unregistered screen; the line in the board stays after it fades.
+    // The shell is shown with the tabs hidden, so the header, and the picker in it, is still
+    // there: #app starts hidden, and a refusal that left it so would strand the person on a blank
+    // page with no way to pick anybody else.
+    if (!me){
+      toast('That account is not on the team list.');
+      showScreen('app'); document.querySelector('.tabs').style.display = 'none';
+      document.getElementById('view-board').innerHTML = '<div class="empty">This account cannot use the queue: '
+        + 'it is inactive or off the roster. Pick another person under Viewing as.</div>';
+      return;
+    }
+    APP.me = me;
+    try { const a = await sb.rpc('caller_is_admin'); APP.isAdmin = (a && a.data) === true; } catch(_){ APP.isAdmin = false; }
+    document.getElementById('identity').textContent = me.full_name + ' (' + me.code + ')';
+    showScreen('app'); loadAll();
+  } catch(e){ toast((e&&e.message)?e.message:'identity check failed'); }
+}
+// One screen left, so this is now a one-liner. Kept as a function because every caller
+// still routes through it and a removal that reaches into callers is not a removal.
+function showScreen(which){
+  document.getElementById('app').style.display = which==='app' ? 'block' : 'none';
+}
+
+// The reset control. Drops the local store, re-seeds, and reloads so every derived
+// view is rebuilt from the seed rather than patched.
+function resetData(){
+  if (!confirm('Discard all local changes and re-seed the bench dataset?')) return;
+  core.reset();
+  location.reload();
+}
+
+// ---------- viewing as ----------
+// The stand-in for signing in. Lists everybody in the dataset; the choice goes to core.js, which
+// persists it for all three tools and signs the session in as that person. A change reloads the
+// page, so routing, reads and every gate run fresh as the new person, the way a sign-in would.
+// Identical in queue.html, console.html and sched.html apart from the fallback each passes.
+function viewAsFill(fallback){
+  const cur = core.viewingAs() || fallback;
+  const people = (core.db().people || []).slice().sort((a,b) => a.code.localeCompare(b.code));
+  const opts = people.map(p => '<option value="' + esc(p.code) + '"' + (p.code === cur ? ' selected' : '') + '>'
+                             + esc(p.code) + ' - ' + esc(p.full_name) + '</option>').join('');
+  document.querySelectorAll('select[data-viewas]').forEach(s => { s.innerHTML = opts; });
+}
+function viewAsChange(code){ core.setViewingAs(code); location.reload(); }
+
+// The bench opens signed in, as whoever Viewing as names, or IPB when nobody has been picked.
+core.signInDefault();
+viewAsFill(core.DEFAULT_USER);
+
+// Say out loud which storage mode is live. Under file:// localStorage throws on access,
+// so the store falls back to memory and changes last only for the session - the person
+// looking at the page should not have to guess which one they are in.
+(function(){
+  const st = core.storageState();
+  const el = document.getElementById('storeMode');
+  if (el) el.textContent = st.mode === 'local'
+    ? 'saved in this browser'
+    : 'memory only, changes are lost on reload' + (st.why ? ' (' + st.why + ')' : '');
+})();
+
+// ============================================================
+// DATA LOAD
+// ============================================================
+async function loadAll(){
+  document.getElementById('view-board').innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('view-lots').innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('view-lrs').innerHTML  = '<div class="empty">Loading...</div>';
+  APP.errors = {};
+  // Named reads, not inline selects. The projections for lots and lab_reports used to be
+  // written out here AND again in the console, and the two had already drifted apart -
+  // the console was short two columns. They are core.LOT_COLS and core.LR_COLS now, one
+  // declaration, and queue_checks.cjs asserts this call site uses them.
+  const [t, p, lt, rt, l, r] = await Promise.all([
+    sb.rpc('team_members'),
+    core.read('productCodes'),
+    core.read('lotTypeValues'),
+    core.read('lrTypeValues'),
+    core.read('lots'),
+    core.read('labReports')
+  ]);
+  // v0.22. THREE maps off one roster read, and they answer three different questions.
+  //   APP.team        every code -> name, INCLUDING leavers. Names on frozen rows must resolve
+  //                   forever; this is the v0.11 rule and it does not change.
+  //   APP.teamActive  write posture. active=false is posture 2, blocked at the seam by core.js.
+  //   APP.teamOn      on the roster at all. roster_until null, or today or later.
+  // The last two are INDEPENDENT and must stay so. A leaver is active=TRUE with a past date under
+  // the model the console writes, so anything reading active alone would still offer them.
+  APP.team = {}; APP.teamActive = {}; APP.teamOn = {};
+  (t.data||[]).forEach(m => {
+    APP.team[m.code] = m.full_name;
+    if (m.active) APP.teamActive[m.code] = true;
+    if (onTeam(m)) APP.teamOn[m.code] = true;
+  });
+  APP.products = p.data||[]; APP.lotTypes = lt.data||[]; APP.lrTypes = rt.data||[];
+  APP.lots = l.data||[]; if (l.error) APP.errors.lots = l.error;
+  APP.lrs  = r.data||[]; if (r.error) APP.errors.lrs  = r.error;
+  renderBoard(); renderLots(); renderLRs();
+}
+
+// ============================================================
+// LOCK STATE  (UI mirror of the SQL lock rule; server still enforces)
+// ============================================================
+function sgtYear2(){
+  // core.now() is the pinned clock, and the only one. Was new Date().
+  const y = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Singapore', year:'numeric' }).format(core.now());
+  return parseInt(y,10) % 100;
+}
+function lotLocked(lot){
+  return lot.frozen
+      || (lot.is_use_test && !!lot.d2)
+      || (!lot.is_use_test && !!lot.lab_report_number)
+      || (!lot.is_use_test && !!lot.experiment_end);
+}
+// contextual dates cell: UT lots show d1/d2/d3, other lots show experiment start/end
+function datesCell(lot){
+  const f = d => esc(fmtDateOnly(d));
+  const p = [];
+  if (lot.is_use_test){
+    if (lot.d1) p.push('d1 '+f(lot.d1));
+    if (lot.d2) p.push('d2 '+f(lot.d2));
+    if (lot.d3) p.push('d3 '+f(lot.d3));
+  } else {
+    if (lot.experiment_start) p.push('start '+f(lot.experiment_start));
+    if (lot.experiment_end)   p.push('end '+f(lot.experiment_end));
+  }
+  return p.join('<br>');
+}
+function sgtToday(){
+  // core.now(), same reason. The new Date(s) calls in fmtTimestamp are PARSING and stay.
+  return new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Singapore', year:'numeric', month:'2-digit', day:'2-digit' }).format(core.now());
+}
+
+// ---------- onTeam, v0.22 ----------
+//
+// people.roster_until, carried out by team_members() since 31/07/26. A date, null meaning current
+// member, and INCLUSIVE: it is their LAST day, so they are still here that morning and gone the
+// next. An off-by-one here takes somebody off the board on the day of their leaving do.
+//
+// sgtToday() rather than a local Date, matching admin.html and matching the server, which tests
+// sgt_today() inside all five identity gates. This page already pins its year to Singapore for lot
+// numbering, so the axis is the one it was already using.
+//
+// String compare, not Date. sgtToday() emits en-CA (yyyy-mm-dd) and a date column arrives from
+// PostgREST in the same shape; both sort lexicographically as dates. Sliced to 10 so a timestamp
+// arriving where a date was expected cannot compare longer than the boundary.
+//
+// Display only. The server refuses a leaver regardless, so nothing here can grant anything.
+function onTeam(p){
+  if (!p || !p.roster_until) return true;
+  return String(p.roster_until).slice(0,10) >= sgtToday();
+}
+// For surfaces holding a bare CODE rather than a roster row. Unknown codes read as on-team: a code
+// this page has never heard of is not something to silently hide.
+function codeOnTeam(code){
+  if (!code) return true;
+  return APP.team[code] === undefined ? true : !!APP.teamOn[code];
+}
+function lrLocked(lr){ return !!lr.report_date; }
+// open -> fully editable; d3pending -> UT life two, only d3 left; frozen -> read-only
+function lotLife(lot){
+  if (!lotLocked(lot)) return 'open';
+  if (lot.is_use_test && lot.d2 && !lot.d3) return 'd3pending';
+  return 'frozen';
+}
+function canAct(ownerCode){ return APP.isAdmin || (!!APP.me && ownerCode === APP.me.code); }
+
+function lotActions(lot){
+  const life = lotLife(lot);
+  const act  = canAct(lot.reserved_by);
+  if (life === 'frozen') return '<span class="lockpill frozen">Locked</span>';
+  if (life === 'd3pending'){
+    const pill = '<span class="lockpill pending">QC pending</span>';
+    return act ? (pill + ' <button class="link" onclick="openEditLot(' + lot.id + ')">Record QC date</button>') : pill;
+  }
+  if (!act) return '';
+  return '<button class="link" onclick="openEditLot(' + lot.id + ')">Edit</button> '
+       + '<button class="link danger" onclick="openRelease(\'lot\',' + lot.id + ')">Release</button>';
+}
+function lrActions(lr){
+  if (lrLocked(lr)){
+    const pill = '<span class="lockpill frozen">Locked</span>';
+    return canAct(lr.created_by)
+      ? pill + ' <button class="link" onclick="openReviseLr(' + lr.id + ')">Revise</button>'
+      : pill;
+  }
+  if (!canAct(lr.created_by)) return '';
+  const relBtn = (lr.revision > 1)
+    ? '<button class="link" onclick="openRelease(\'lr\',' + lr.id + ')">Undo revision</button>'
+    : '<button class="link danger" onclick="openRelease(\'lr\',' + lr.id + ')">Release</button>';
+  return '<button class="link" onclick="openEditLr(' + lr.id + ')">Edit</button> ' + relBtn;
+}
+
+// ============================================================
+// RENDER  -  LOTS
+// ============================================================
+function renderLots(){
+  const v = document.getElementById('view-lots');
+  let h = '<div class="toolbar"><button class="btn primary" onclick="openClaim(\'lot\')">+ Claim a lot</button>'
+        + (APP.lots.length ? '<button class="btn" onclick="copyLotsTsv(this)">Copy as TSV</button>' : '<span></span>') + '</div>';
+  if (APP.errors.lots){ v.innerHTML = h + errHtml(APP.errors.lots); return; }
+  if (APP.lots.length === 0){ v.innerHTML = h + '<div class="empty">No lots reserved yet. Claim one to start.</div>'; return; }
+
+  const prods = [];
+  APP.lots.forEach(lot => { if (prods.indexOf(lot.product) === -1) prods.push(lot.product); });
+  if (!APP.activeProduct || prods.indexOf(APP.activeProduct) === -1) APP.activeProduct = prods[0];
+  const counts = {}; APP.lots.forEach(lot => { counts[lot.product] = (counts[lot.product]||0)+1; });
+
+  h += '<div class="subtabs">';
+  prods.forEach(p => { h += '<button class="subtab '+(p===APP.activeProduct?'active':'')+'" onclick="selectProduct(\''+esc(p)+'\')">'+esc(p)+'<span class="count">'+counts[p]+'</span></button>'; });
+  h += '</div>';
+
+  h += '<div class="filters"><span class="flabel">Filter</span>'
+     + '<select class="'+(APP.lotFilterType!=='all'?'on':'')+'" onchange="setLotFilter(\'type\', this.value)">'
+     +   filterTypeOptions(APP.lotTypes, APP.lots, 'lot_type', APP.lotFilterType) + '</select>'
+     + '<select class="'+(APP.lotFilterStatus!=='all'?'on':'')+'" onchange="setLotFilter(\'status\', this.value)">'
+     +   stateOptions([['all','All states'],['open','Open'],['d3pending','QC pending'],['frozen','Locked']], APP.lotFilterStatus) + '</select>'
+     + '</div>';
+
+  const rows  = lotRows(APP.activeProduct);
+  const total = APP.lots.filter(l => l.product === APP.activeProduct).length;
+  h += '<div class="meta">' + (rows.length === total ? total : (rows.length + ' of ' + total))
+     + ' lots in ' + esc(APP.activeProduct) + '</div>';
+  h += '<div class="tablewrap"><table class="data"><thead><tr>'
+     + '<th>Lot No.</th><th>Type</th><th>Purpose</th><th class="dcol" title="Use-test lots: d1 lab start, d2 QC submit (locks), d3 QC summary (freezes). Other lots: experiment start, then end (end locks).">Dates</th><th>LR Ref</th><th>Remarks</th><th>Reserved by</th><th>Reserved</th><th>Actions</th>'
+     + '</tr></thead><tbody>';
+  rows.forEach(lot => {
+    h += '<tr>'
+       + '<td class="code">' + esc(lot.lot_number) + '</td>'
+       + '<td>' + esc(lot.lot_type) + '</td>'
+       + '<td class="wrap">' + esc(lot.purpose) + '</td>'
+       + '<td class="code dcol">' + datesCell(lot) + '</td>'
+       + '<td class="code lrref">' + esc(lot.lab_report_number) + '</td>'
+       + '<td class="wrap">' + esc(lot.remarks) + '</td>'
+       + byCell(lot.reserved_by)
+       + '<td>' + esc(fmtTimestamp(lot.reserved_at)) + '</td>'
+       + '<td>' + lotActions(lot) + '</td>'
+       + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  v.innerHTML = h;
+}
+function selectProduct(p){ APP.activeProduct = p; renderLots(); }
+function setLotFilter(kind, val){
+  if (kind === 'type') APP.lotFilterType = val; else APP.lotFilterStatus = val;
+  renderLots();
+}
+// single source of truth for which lot rows are visible; the TSV copy reads this too
+function lotRows(product){
+  return APP.lots
+    .filter(l => l.product === product)
+    .filter(l => APP.lotFilterType === 'all' || l.lot_type === APP.lotFilterType)
+    .filter(l => APP.lotFilterStatus === 'all' || lotLife(l) === APP.lotFilterStatus)
+    .sort((a,b)=>(b.year-a.year)||(b.seq-a.seq));
+}
+
+// ============================================================
+// RENDER  -  LAB REPORTS
+// ============================================================
+function renderLRs(){
+  const v = document.getElementById('view-lrs');
+  let h = '<div class="toolbar"><button class="btn primary" onclick="openClaim(\'lr\')">+ Claim an LR</button>'
+        + (APP.lrs.length ? '<button class="btn" onclick="copyLrsTsv(this)">Copy as TSV</button>' : '<span></span>') + '</div>';
+  if (APP.errors.lrs){ v.innerHTML = h + errHtml(APP.errors.lrs); return; }
+  if (APP.lrs.length === 0){ v.innerHTML = h + '<div class="empty">No lab reports yet. Claim one to start.</div>'; return; }
+
+  const years = []; APP.lrs.forEach(r => { if (years.indexOf(r.year)===-1) years.push(r.year); });
+  years.sort((a,b)=>b-a);
+  const counts = {}; APP.lrs.forEach(r => { counts[r.year]=(counts[r.year]||0)+1; });
+
+  h += '<div class="subtabs">';
+  h += '<button class="subtab '+(APP.activeYear==='all'?'active':'')+'" onclick="selectYear(\'all\')">All<span class="count">'+APP.lrs.length+'</span></button>';
+  years.forEach(y => { h += '<button class="subtab '+(String(APP.activeYear)===String(y)?'active':'')+'" onclick="selectYear('+y+')">20'+String(y).padStart(2,'0')+'<span class="count">'+counts[y]+'</span></button>'; });
+  h += '</div>';
+
+  h += '<div class="filters"><span class="flabel">Filter</span>'
+     + '<select class="'+(APP.lrFilterType!=='all'?'on':'')+'" onchange="setLrFilter(\'type\', this.value)">'
+     +   filterTypeOptions(APP.lrTypes, APP.lrs, 'lr_type', APP.lrFilterType) + '</select>'
+     + '<select class="'+(APP.lrFilterStatus!=='all'?'on':'')+'" onchange="setLrFilter(\'status\', this.value)">'
+     +   stateOptions([['all','All states'],['open','Open'],['locked','Locked']], APP.lrFilterStatus) + '</select>'
+     + '</div>';
+
+  const rows  = lrRows();
+  const total = APP.lrs.filter(r => APP.activeYear==='all' || String(r.year)===String(APP.activeYear)).length;
+  h += '<div class="meta">' + (rows.length === total ? total : (rows.length + ' of ' + total)) + ' reports</div>';
+  h += '<div class="tablewrap"><table class="data"><thead><tr>'
+     + '<th>LR No.</th><th>Product</th><th>Type</th><th>Subject</th><th>Date approved</th><th>Created by</th><th>Reserved</th><th>Actions</th>'
+     + '</tr></thead><tbody>';
+  rows.forEach(r => {
+    const full = esc(r.lr_number) + esc(r.lr_display || '');
+    h += '<tr>'
+       + '<td class="code">' + full + '</td>'
+       + '<td class="code">' + esc(r.product) + '</td>'
+       + '<td>' + esc(r.lr_type) + '</td>'
+       + '<td class="wrap">' + esc(r.subject) + '</td>'
+       + '<td>' + esc(fmtDateOnly(r.report_date)) + '</td>'
+       + byCell(r.created_by)
+       + '<td>' + esc(fmtTimestamp(r.created_at)) + '</td>'
+       + '<td>' + lrActions(r) + '</td>'
+       + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  v.innerHTML = h;
+}
+function selectYear(y){ APP.activeYear = y; renderLRs(); }
+function setLrFilter(kind, val){
+  if (kind === 'type') APP.lrFilterType = val; else APP.lrFilterStatus = val;
+  renderLRs();
+}
+// single source of truth for which LR rows are visible; the TSV copy reads this too.
+// APP.lrs arrives ordered lr_number desc, so no re-sort here.
+function lrRows(){
+  return APP.lrs
+    .filter(r => APP.activeYear === 'all' || String(r.year) === String(APP.activeYear))
+    .filter(r => APP.lrFilterType === 'all' || r.lr_type === APP.lrFilterType)
+    .filter(r => APP.lrFilterStatus === 'all' || (APP.lrFilterStatus === 'open' ? !lrLocked(r) : lrLocked(r)));
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(tab){
+  APP.activeTab = tab;
+  document.getElementById('view-board').style.display = tab==='board' ? 'block' : 'none';
+  document.getElementById('view-lots').style.display = tab==='lots' ? 'block' : 'none';
+  document.getElementById('view-lrs').style.display  = tab==='lrs'  ? 'block' : 'none';
+  document.getElementById('tab-board').classList.toggle('active', tab==='board');
+  document.getElementById('tab-lots').classList.toggle('active', tab==='lots');
+  document.getElementById('tab-lrs').classList.toggle('active', tab==='lrs');
+}
+
+// ============================================================
+// OPEN ITEMS BOARD  -  per-person open counts (Name, Code, Lots open, LR open),
+// active team still on the roster (teamActive AND teamOn), minus the admin,
+// sorted by total open (lots open + LR open) descending, code as tie-break.
+// Pure view over loaded data; "open" = not locked (lotLocked / lrLocked).
+// Closed counts, and the two columns that carried them, were dropped in v0.17.
+// ============================================================
+function renderBoard(){
+  const v = document.getElementById('view-board'); if (!v) return;
+  // seed every active, on-roster, non-admin person at zero so the whole team shows
+  // v0.22: teamOn as well as teamActive, and they are two separate tests, BOTH required. A
+  // posture-2 trainee gets no row here: they cannot write, so they are not holding a number
+  // anybody is waiting on. A leaver gets none either: the row would read 0 and 0 for somebody
+  // who has gone, or worse, would sit there with an open lot that needs reassigning and no
+  // indication anywhere on this page that nobody is coming back for it.
+  //
+  // CORRECTED. This comment used to claim a posture-2 trainee still got a row, which the code
+  // has never done and the checker has always asserted against. The schedule tool's dashboard
+  // filters on onTeam ALONE, so a trainee does keep a bubble there - that is a different
+  // question ("who is on the team") and it earns a different answer from this one ("who is
+  // holding open numbers"). The comment had borrowed the other tool's rule.
+  // Their existing rows are untouched. Every lot and LR they hold still lists their code, and
+  // byCell still resolves their name off the full roster map.
+  const tally = {};
+  Object.keys(APP.teamActive).forEach(c => { if (c !== core.ADMIN_CODE && APP.teamOn[c]) tally[c] = { lo:0, ro:0 }; });
+  (APP.lots||[]).forEach(lot => { const t = tally[lot.reserved_by]; if (t && !lotLocked(lot)) t.lo++; });
+  (APP.lrs||[]).forEach(lr => { const t = tally[lr.created_by]; if (t && !lrLocked(lr)) t.ro++; });
+  const rows = Object.keys(tally).map(c => ({
+    code:c, name:APP.team[c]||'', lo:tally[c].lo, ro:tally[c].ro, open:tally[c].lo + tally[c].ro
+  }));
+  rows.sort((a,b) => (b.open - a.open) || a.code.localeCompare(b.code));
+
+  if (rows.length === 0){ v.innerHTML = '<div class="empty">No active team members to show.</div>'; return; }
+  let h = '<div class="tablewrap"><table class="data board"><thead><tr>'
+     + '<th>Name</th><th>Code</th><th>Lots open</th><th>LR open</th>'
+     + '</tr></thead><tbody>';
+  rows.forEach(r => {
+    h += '<tr>'
+       + '<td>' + esc(r.name) + '</td>'
+       + '<td class="code">' + esc(r.code) + '</td>'
+       + '<td>' + r.lo + '</td>'
+       + '<td>' + r.ro + '</td>'
+       + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  v.innerHTML = h;
+}
+
+// ============================================================
+// MODAL  -  claim / edit / release
+// ============================================================
+function showModal(html){ document.getElementById('modalBody').innerHTML = html; document.getElementById('modalOverlay').style.display = 'flex'; }
+function closeModal(){ document.getElementById('modalOverlay').style.display = 'none'; document.getElementById('modalBody').innerHTML = ''; APP.modal = { mode:null, id:null, num:null }; }
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+
+// in-app help: opens over the current tab; Close (or Esc) returns to it
+function openHelp(){
+  const sec = (title, items) =>
+    '<div style="margin-bottom:14px;">'
+    + '<div style="font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--accent);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">'+title+'</div>'
+    + '<ul style="margin:0;padding-left:18px;line-height:1.5;font-size:13px;color:var(--text2);">'
+    + items.map(i => '<li>'+i+'</li>').join('') + '</ul></div>';
+  const body = '<div class="modal-title">Queue, quick help</div>'
+    + '<div style="text-align:left;max-height:60vh;overflow-y:auto;padding-right:4px;">'
+    + sec('Reserving numbers', [
+        'You get the lowest free number for that product and year.',
+        'Gaps are normal. A skipped number stays skipped.',
+        'Releasing a number deletes it for good and logs it. It does not come back.'
+      ])
+    + sec('Use test lots, the dates', [
+        '<b>d1</b> use test started in lab.',
+        '<b>d2</b> sample submitted to QC. Setting d2 locks the lot.',
+        '<b>d3</b> QC quality summary received. Setting d3 freezes the lot.',
+        'It runs one way. A lot does not reopen once it has moved on.'
+      ])
+    + sec('Lock states', [
+        '<b>Open</b> full edit.',
+        '<b>QC pending</b> only the QC date (d3) can still be recorded.',
+        '<b>Locked</b> read only.'
+      ])
+    + sec('Editing and releasing', [
+        'Only the owner of a row can edit or release it.'
+      ])
+    + sec('Use Test tickbox', [
+        "Ticking Use Test makes the LR Ref the lot's own number."
+      ])
+    + sec('Revising an LR', [
+        'Revise shows on an approved (locked) LR, for its owner or an admin.',
+        'The current approved version is archived: kept on record, hidden from the register.',
+        'A new draft is made at the next revision (R02, R03 ...), unapproved and editable, and can be handed to a new owner.',
+        'Set its approval date through Edit to lock the new revision.'
+      ])
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn primary" onclick="closeModal()">Close</button></div>';
+  showModal(body);
+}
+
+function meLabel(){ return APP.me ? (APP.me.full_name + ' (' + APP.me.code + ')') : ''; }
+function productOptions(selected){ return APP.products.filter(p=>p.active).map(p => '<option value="'+esc(p.code)+'"'+(p.code===selected?' selected':'')+'>'+esc(p.code)+'</option>').join(''); }
+function typeOptions(list, selected){ return list.filter(t=>t.active || t.value===selected).map(t => '<option value="'+esc(t.value)+'"'+(t.value===selected?' selected':'')+'>'+esc(t.value)+'</option>').join(''); }
+// filter dropdown: active types plus any legacy value still present on a row, so an
+// inactive type on an old row stays reachable. Values are a filter key, not a write.
+function filterTypeOptions(list, rows, key, selected){
+  const vals = [];
+  (rows||[]).forEach(r => { const v = r[key]; if (v && vals.indexOf(v) === -1) vals.push(v); });
+  (list||[]).forEach(t => { if (t.active && vals.indexOf(t.value) === -1) vals.push(t.value); });
+  vals.sort();
+  let o = '<option value="all"'+(selected==='all'?' selected':'')+'>All types</option>';
+  vals.forEach(v => { o += '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>'; });
+  return o;
+}
+function stateOptions(pairs, selected){
+  return pairs.map(p => '<option value="'+p[0]+'"'+(p[0]===selected?' selected':'')+'>'+esc(p[1])+'</option>').join('');
+}
+function ownerOptions(selected){
+  let o = '<option value=""'+(!selected?' selected':'')+'>(none)</option>';
+  Object.keys(APP.team).sort().forEach(c => {
+    const isActive = !!APP.teamActive[c];
+    const isOn     = !!APP.teamOn[c];
+    if (c === core.ADMIN_CODE && c !== selected) return;   // the admin is never an assignable bench owner
+    if (!isActive && c !== selected) return;
+    // v0.22: and off the roster. A SEPARATE test from active, not a widening of it, because a
+    // leaver is active=TRUE with a past date under the model the console writes.
+    if (!isOn && c !== selected) return;
+    // The escape, and it is the half that matters. Opening a lot held by a leaver to reassign it
+    // must still show who holds it; without this the dropdown would render (none) and a save
+    // would silently strip the owner off a row that has one.
+    const label = esc(c)+' - '+esc(APP.team[c])
+                + (!isOn ? ' (left)' : (isActive ? '' : ' (inactive)'));
+    o += '<option value="'+esc(c)+'"'+(c===selected?' selected':'')+'>'+label+'</option>';
+  });
+  return o;
+}
+function firstNonUseTestType(){ const t = APP.lotTypes.filter(x=>x.active && x.value!=='Use Test')[0]; return t ? t.value : ''; }
+
+// two-way link: checkbox <-> Type. Box ticked => Type locked to Use Test and
+// LR Ref locked to this lot number. Unticking clears the LR Ref so the lot
+// is no longer self-referenced and can be released.
+function wireUseTest(){
+  const sel = document.getElementById('f_type'), cb = document.getElementById('f_usetest'), lr = document.getElementById('f_lrref');
+  const dates = document.getElementById('utDates');
+  const expDates = document.getElementById('expDates');
+  if (!sel || !cb) return;
+  const showDates = on => {
+    if (dates) dates.style.display = on ? 'block' : 'none';
+    if (expDates) expDates.style.display = on ? 'none' : 'block';
+  };
+  const lock = () => { sel.value = 'Use Test'; sel.disabled = true; if (lr){ lr.value = APP.modal.num || lr.value; lr.disabled = true; } showDates(true); };
+  const unlock = () => { sel.disabled = false; if (lr){ lr.disabled = false; lr.value = ''; } showDates(false); };
+  cb.addEventListener('change', () => { if (cb.checked) lock(); else { unlock(); if (sel.value==='Use Test') sel.value = firstNonUseTestType(); } });
+  sel.addEventListener('change', () => { if (sel.value==='Use Test'){ cb.checked = true; lock(); } });
+  if (cb.checked) lock(); else showDates(false);
+}
+
+function openClaim(kind){
+  APP.modal = { mode:'claim-'+kind, id:null, num:null };
+  let body;
+  if (kind === 'lot'){
+    body = '<div class="modal-title">Claim a lot</div><div class="modal-as">Reserving as '+esc(meLabel())+'</div>'
+      + '<div class="field"><label>Product</label><select id="f_product">'+productOptions(APP.activeProduct)+'</select></div>'
+      + '<div class="field"><label>Type</label><select id="f_type">'+typeOptions(APP.lotTypes,'')+'</select></div>'
+      + '<div class="field"><label>Purpose (required)</label><textarea id="f_text" rows="3"></textarea><div class="nudge">No customer or actual molecule names or confidential identifiers.</div></div>'
+      + '<div class="field check"><label><input type="checkbox" id="f_usetest"> Use Test (the lot references its own number as the LR)</label></div>'
+      + '<div class="modal-error" id="modalError"></div>'
+      + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="okBtn" onclick="submitForm()">Reserve number</button></div>';
+  } else {
+    body = '<div class="modal-title">Claim an LR</div><div class="modal-as">Reserving as '+esc(meLabel())+'</div>'
+      + '<div class="field"><label>Product</label><select id="f_product">'+productOptions(APP.products[0]?APP.products[0].code:'')+'</select></div>'
+      + '<div class="field"><label>Type</label><select id="f_type">'+typeOptions(APP.lrTypes,'')+'</select></div>'
+      + '<div class="field"><label>Subject (required)</label><textarea id="f_text" rows="3"></textarea><div class="nudge">No customer or actual molecule names or confidential identifiers.</div></div>'
+      + '<div class="field check"><label><input type="checkbox" id="f_standalone"> Standalone LR (no lots reference this report)</label></div>'
+      + '<div class="modal-error" id="modalError"></div>'
+      + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="okBtn" onclick="submitForm()">Reserve number</button></div>';
+  }
+  showModal(body);
+  if (kind === 'lot') wireUseTest();
+}
+
+function openEditLot(id){
+  const lot = APP.lots.find(x => x.id === id); if (!lot) return;
+  const life = lotLife(lot);
+  if (life === 'frozen') return;  // no edit path on a frozen lot
+
+  if (life === 'd3pending'){
+    // life two: only the QC-summary date (d3) is editable; the rest is frozen context
+    APP.modal = { mode:'edit-lot-d3', id:id, num:lot.lot_number };
+    const body = '<div class="modal-title">Record QC date for '+esc(lot.lot_number)+'</div><div class="modal-as">Editing as '+esc(meLabel())+'</div>'
+      + '<div class="field"><label>Type</label><input type="text" value="'+esc(lot.lot_type)+'" disabled></div>'
+      + '<div class="field"><label>Purpose</label><textarea rows="2" disabled>'+esc(lot.purpose)+'</textarea></div>'
+      + '<div class="field"><label>d1  use test started</label><input type="text" value="'+esc(fmtDateOnly(lot.d1))+'" disabled></div>'
+      + '<div class="field"><label>d2  sample submitted to QC</label><input type="text" value="'+esc(fmtDateOnly(lot.d2))+'" disabled></div>'
+      + '<div class="field"><label>d3  QC quality summary received (sets this lot fully read-only)</label><input type="date" id="f_d3" value="'+esc((lot.d3||'').slice(0,10))+'"></div>'
+      + '<div class="modal-error" id="modalError"></div>'
+      + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="okBtn" onclick="submitForm()">Save d3</button></div>';
+    showModal(body);
+    return;
+  }
+
+  // life one (open): full edit, with the UT-only date block (d1, d2)
+  APP.modal = { mode:'edit-lot', id:id, num:lot.lot_number };
+  const dateBlock = '<div id="utDates" style="display:'+(lot.is_use_test?'block':'none')+';">'
+    + '<div class="field"><label>d1  use test started in lab</label><input type="date" id="f_d1" value="'+esc((lot.d1||'').slice(0,10))+'"></div>'
+    + '<div class="field"><label>d2  sample submitted to QC (setting this locks the lot)</label><input type="date" id="f_d2" value="'+esc((lot.d2||'').slice(0,10))+'"></div>'
+    + '</div>';
+  const expBlock = '<div id="expDates" style="display:'+(lot.is_use_test?'none':'block')+';">'
+    + '<div class="field"><label>Experiment start</label><input type="date" id="f_expstart" max="'+sgtToday()+'" value="'+esc((lot.experiment_start||'').slice(0,10))+'"></div>'
+    + '<div class="field"><label>Experiment end (setting this locks the lot)</label><input type="date" id="f_expend" max="'+sgtToday()+'" value="'+esc((lot.experiment_end||'').slice(0,10))+'"></div>'
+    + '</div>';
+  const body = '<div class="modal-title">Edit '+esc(lot.lot_number)+'</div><div class="modal-as">Editing as '+esc(meLabel())+'</div>'
+    + '<div class="field"><label>Type</label><select id="f_type">'+typeOptions(APP.lotTypes, lot.lot_type)+'</select></div>'
+    + '<div class="field"><label>Purpose (required)</label><textarea id="f_text" rows="3">'+esc(lot.purpose)+'</textarea></div>'
+    + '<div class="field"><label>LR Ref</label><input type="text" id="f_lrref" value="'+esc(lot.lab_report_number)+'"></div>'
+    + '<div class="field"><label>Remarks</label><textarea id="f_remarks" rows="2">'+esc(lot.remarks)+'</textarea></div>'
+    + '<div class="field"><label>Reserved by</label><select id="f_owner">'+ownerOptions(lot.reserved_by)+'</select></div>'
+    + '<div class="field check"><label><input type="checkbox" id="f_usetest"'+(lot.is_use_test?' checked':'')+'> Use Test (LR Ref becomes this lot number)</label></div>'
+    + dateBlock
+    + expBlock
+    + '<div class="modal-error" id="modalError"></div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="okBtn" onclick="submitForm()">Save changes</button></div>';
+  showModal(body); wireUseTest();
+}
+
+function openEditLr(id){
+  const lr = APP.lrs.find(x => x.id === id); if (!lr) return;
+  APP.modal = { mode:'edit-lr', id:id, num:(lr.lr_number+(lr.lr_display||'')) };
+  const body = '<div class="modal-title">Edit '+esc(lr.lr_number+(lr.lr_display||''))+'</div><div class="modal-as">Editing as '+esc(meLabel())+'</div>'
+    + '<div class="field"><label>Type</label><select id="f_type">'+typeOptions(APP.lrTypes, lr.lr_type)+'</select></div>'
+    + '<div class="field"><label>Subject (required)</label><textarea id="f_text" rows="3">'+esc(lr.subject)+'</textarea></div>'
+    + '<div class="field"><label>Approval date (setting this locks the LR against release)</label><input type="date" id="f_date" value="'+esc((lr.report_date||'').slice(0,10))+'"></div>'
+    + '<div class="field"><label>Revision</label><input type="number" id="f_rev" min="1" value="'+esc(lr.revision||1)+'"></div>'
+    + '<div class="field"><label>Created by</label><select id="f_owner">'+ownerOptions(lr.created_by)+'</select></div>'
+    + '<div class="field check"><label><input type="checkbox" id="f_standalone"'+(lr.standalone?' checked':'')+'> Standalone LR (no lots reference this report)</label></div>'
+    + '<div class="modal-error" id="modalError"></div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="okBtn" onclick="submitForm()">Save changes</button></div>';
+  showModal(body);
+}
+
+function openReviseLr(id){
+  const lr = APP.lrs.find(x => x.id === id); if (!lr) return;
+  const full     = lr.lr_number + (lr.lr_display || '');
+  const nextRev  = (lr.revision || 1) + 1;
+  const nextDisp = '/' + lr.product + '/R' + String(nextRev).padStart(2, '0');
+  const nextFull = lr.lr_number + nextDisp;
+  APP.modal = { mode:'revise-lr', id:id, num:full };
+  const body = '<div class="modal-title">Revise '+esc(full)+'</div>'
+    + '<div class="modal-as">Revising as '+esc(meLabel())+'</div>'
+    + '<div class="field"><label>Owner of '+esc(nextFull)+'</label><select id="f_owner">'+ownerOptions(lr.created_by)+'</select></div>'
+    + '<div class="modal-error" id="modalError"></div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="okBtn" onclick="submitForm()">Revise</button></div>';
+  showModal(body);
+}
+
+function openRelease(kind, id){
+  const item = kind==='lot' ? APP.lots.find(x=>x.id===id) : APP.lrs.find(x=>x.id===id);
+  if (!item) return;
+  const num = kind==='lot' ? item.lot_number : (item.lr_number+(item.lr_display||''));
+  const isUndo = (kind==='lr' && item.revision > 1);
+  APP.modal = { mode:'release-'+kind, id:id, num:num, undo:isUndo };
+  const title = isUndo ? 'Undo revision of '+esc(num)+'?' : 'Release '+esc(num)+'?';
+  const msg = isUndo
+    ? 'This rolls the LR back to its previous revision and restores it as approved and locked. The number is kept, not freed. Recorded in the release log.'
+    : 'This frees the number and removes the row. The number can be claimed again later. Recorded in the release log.';
+  const okStyle = isUndo ? '' : ' style="background:var(--error);border-color:var(--error);"';
+  const okLabel = isUndo ? 'Undo revision' : 'Release';
+  const body = '<div class="modal-title">'+title+'</div>'
+    + '<div class="auth-msg" style="margin-top:6px;text-align:left;">'+msg+'</div>'
+    + '<div class="modal-error" id="modalError"></div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn primary" id="okBtn" onclick="submitForm()"'+okStyle+'>'+okLabel+'</button></div>';
+  showModal(body);
+}
+
+async function submitForm(){
+  const mode = APP.modal.mode;
+  const errEl = document.getElementById('modalError');
+  const btn = document.getElementById('okBtn');
+  const v = id => { const el = document.getElementById(id); return el ? (el.value||'').trim() : ''; };
+  errEl.textContent = '';
+  try {
+    let res, toastMsg;
+    if (mode === 'claim-lot'){
+      const product=v('f_product'), type=v('f_type'), text=v('f_text');
+      if (!product||!type||!text){ errEl.textContent='Pick a product and type, and enter a purpose.'; return; }
+      lockBtn(btn,'Reserving...');
+      res = await sb.rpc('reserve_lot', { p_product:product, p_lot_type:type, p_purpose:text, p_is_use_test: document.getElementById('f_usetest').checked });
+      if (res.error) throw res.error;
+      const row = one(res.data); APP.activeProduct = product; toastMsg = 'Reserved ' + (row?row.lot_number:'');
+    }
+    else if (mode === 'claim-lr'){
+      const product=v('f_product'), type=v('f_type'), text=v('f_text');
+      if (!product||!type||!text){ errEl.textContent='Pick a product and type, and enter a subject.'; return; }
+      lockBtn(btn,'Reserving...');
+      res = await sb.rpc('reserve_lr', { p_product:product, p_lr_type:type, p_subject:text, p_standalone: document.getElementById('f_standalone').checked });
+      if (res.error) throw res.error;
+      const row = one(res.data); APP.activeYear='all'; toastMsg = 'Reserved ' + (row?(row.lr_number+(row.lr_display||'')):'');
+    }
+    else if (mode === 'edit-lot'){
+      const type=v('f_type'), text=v('f_text');
+      if (!type||!text){ errEl.textContent='Type and purpose are required.'; return; }
+      const isUT = document.getElementById('f_usetest').checked;
+      const d1 = isUT ? (v('f_d1') || null) : null;
+      const d2 = isUT ? (v('f_d2') || null) : null;
+      const expStart = !isUT ? (v('f_expstart') || null) : null;
+      const expEnd   = !isUT ? (v('f_expend')   || null) : null;
+      if (!isUT){
+        if (expEnd && !expStart){ errEl.textContent='Set the experiment start date before the end date.'; return; }
+        if (expStart && expEnd && expEnd <= expStart){ errEl.textContent='Experiment end date must be later than the start date.'; return; }
+      }
+      // client mirror of the three server-side LR-ref checks (server remains authoritative; this is UX only).
+      // fires only when a non-UT lot's ref is being set or changed to a new non-null value.
+      const lot = APP.lots.find(x => x.id === APP.modal.id);
+      const ref = v('f_lrref') || null;
+      if (!isUT && ref && lot && ref !== (lot.lab_report_number||'')) {
+        const m = APP.lrs.find(r => (r.lr_number + (r.lr_display||'')) === ref);
+        if (!m)                        { errEl.textContent = 'LR '+ref+' is not in the register. Claim the LR before locking a lot to it.'; return; }
+        if (m.product !== lot.product) { errEl.textContent = 'LR '+m.lr_number+' is registered to '+m.product+', not '+lot.product+'.'; return; }
+        if (lrLocked(m))               { errEl.textContent = 'LR '+m.lr_number+' is signed and cannot be used to lock a lot.'; return; }
+      }
+      lockBtn(btn,'Saving...');
+      res = await sb.rpc('update_lot', { p_id:APP.modal.id, p_lot_type:type, p_purpose:text,
+        p_is_use_test: isUT,
+        p_lab_report_number: v('f_lrref') || null, p_remarks: v('f_remarks') || null,
+        p_reserved_by: v('f_owner') || null,
+        p_d1: d1, p_d2: d2, p_d3: null,
+        p_experiment_start: expStart, p_experiment_end: expEnd });
+      if (res.error) throw res.error;
+      toastMsg = 'Saved ' + APP.modal.num;
+    }
+    else if (mode === 'edit-lot-d3'){
+      const lot = APP.lots.find(x => x.id === APP.modal.id);
+      if (!lot){ errEl.textContent='Row not found. Refresh and retry.'; return; }
+      const d3 = v('f_d3') || null;
+      if (!d3){ errEl.textContent='Enter the QC summary date.'; return; }
+      lockBtn(btn,'Saving...');
+      // server applies only d3 on a locked lot; current values sent for completeness
+      res = await sb.rpc('update_lot', { p_id:APP.modal.id, p_lot_type:lot.lot_type, p_purpose:lot.purpose,
+        p_is_use_test:lot.is_use_test, p_lab_report_number:lot.lab_report_number,
+        p_remarks:lot.remarks, p_reserved_by:lot.reserved_by,
+        p_d1:lot.d1, p_d2:lot.d2, p_d3:d3,
+        p_experiment_start:lot.experiment_start, p_experiment_end:lot.experiment_end });
+      if (res.error) throw res.error;
+      toastMsg = 'Recorded QC date for ' + APP.modal.num;
+    }
+    else if (mode === 'edit-lr'){
+      const type=v('f_type'), text=v('f_text');
+      if (!type||!text){ errEl.textContent='Type and subject are required.'; return; }
+      lockBtn(btn,'Saving...');
+      const rev = parseInt(v('f_rev'),10);
+      res = await sb.rpc('update_lr', { p_id:APP.modal.id, p_lr_type:type, p_subject:text,
+        p_report_date: v('f_date') || null, p_revision: isNaN(rev)?null:rev, p_created_by: v('f_owner') || null,
+        p_standalone: document.getElementById('f_standalone').checked });
+      if (res.error) throw res.error;
+      toastMsg = 'Saved ' + APP.modal.num;
+    }
+    else if (mode === 'revise-lr'){
+      const owner = v('f_owner');
+      if (!owner){ errEl.textContent='Pick the owner for the new revision.'; return; }
+      lockBtn(btn,'Revising...');
+      res = await sb.rpc('revise_lr', { p_id:APP.modal.id, p_new_owner:owner });
+      if (res.error) throw res.error;
+      const row = one(res.data);
+      toastMsg = 'Revised to ' + (row ? (row.lr_number+(row.lr_display||'')) : APP.modal.num);
+    }
+    else if (mode === 'release-lot' || mode === 'release-lr'){
+      lockBtn(btn, APP.modal.undo ? 'Undoing...' : 'Releasing...');
+      const fn = mode==='release-lot' ? 'release_lot' : 'release_lr';
+      res = await sb.rpc(fn, { p_id: APP.modal.id });
+      if (res.error) throw res.error;
+      toastMsg = APP.modal.undo ? ('Undid revision of ' + APP.modal.num) : ('Released ' + APP.modal.num);
+    }
+    const num = APP.modal.num;
+    closeModal();
+    toast(toastMsg);
+    await loadAll();
+  } catch(e){
+    errEl.textContent = (e && e.message) ? e.message : 'Action failed.';
+    if (btn){ btn.disabled = false; btn.textContent = btn.dataset.label || 'OK'; }
+  }
+}
+function lockBtn(btn, label){ if (btn){ btn.dataset.label = btn.textContent; btn.disabled = true; btn.textContent = label; } }
+function one(data){ return Array.isArray(data) ? data[0] : data; }
+
+function toast(text){
+  const t = document.getElementById('toast');
+  t.textContent = text; t.style.display = 'block';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { t.style.display = 'none'; }, 10000);
+}
+
+// ============================================================
+// TSV COPY
+// ============================================================
+function copyLotsTsv(btn){
+  const rows = lotRows(APP.activeProduct);
+  const lines = [['Lot No.','Type','Purpose','Use Test','LR Ref','Remarks','Reserved by','Reserved'].join('\t')];
+  rows.forEach(lot => { lines.push([ lot.lot_number, tsvClean(lot.lot_type), tsvClean(lot.purpose), lot.is_use_test?'Y':'', tsvClean(lot.lab_report_number), tsvClean(lot.remarks), tsvClean(lot.reserved_by), fmtTimestamp(lot.reserved_at) ].join('\t')); });
+  copyText(lines.join('\n'), btn);
+}
+function copyLrsTsv(btn){
+  const rows = lrRows();
+  const lines = [['LR No.','Product','Type','Subject','Date approved','Created by','Reserved'].join('\t')];
+  rows.forEach(r => { lines.push([ (r.lr_number+(r.lr_display||'')), tsvClean(r.product), tsvClean(r.lr_type), tsvClean(r.subject), fmtDateOnly(r.report_date), tsvClean(r.created_by), fmtTimestamp(r.created_at) ].join('\t')); });
+  copyText(lines.join('\n'), btn);
+}
+function copyText(str, btn){
+  const done = () => { if (!btn) return; const t = btn.textContent; btn.textContent='Copied'; setTimeout(()=>{ btn.textContent=t; },1500); };
+  if (navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(str).then(done).catch(()=>fallbackCopy(str,done)); } else { fallbackCopy(str,done); }
+}
+function fallbackCopy(str, done){ const ta=document.createElement('textarea'); ta.value=str; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(e){} document.body.removeChild(ta); }
+
+// ============================================================
+// HELPERS
+// ============================================================
+function byCell(code){ if (!code) return '<td></td>'; const name = APP.team[code]||''; return '<td class="code" title="'+esc(name)+'">'+esc(code)+'</td>'; }
+function tsvClean(s){ return (s==null) ? '' : String(s).replace(/[\t\r\n]+/g,' ').trim(); }
+function fmtDateOnly(s){ if (!s) return ''; const p=String(s).slice(0,10).split('-'); if (p.length!==3) return ''; return p[2]+'/'+p[1]+'/'+p[0].slice(2); }
+function fmtTimestamp(s){
+  if (!s) return ''; const d = new Date(s); if (isNaN(d.getTime())) return '';
+  const sg = new Date(d.getTime() + 8*3600*1000);
+  return String(sg.getUTCDate()).padStart(2,'0')+'/'+String(sg.getUTCMonth()+1).padStart(2,'0')+'/'+String(sg.getUTCFullYear()).slice(2)
+    + ' ' + String(sg.getUTCHours()).padStart(2,'0') + String(sg.getUTCMinutes()).padStart(2,'0') + ' hrs';
+}
+function errHtml(e){ const p=[]; if(e.message)p.push('message: '+e.message); if(e.code)p.push('code: '+e.code); if(e.hint)p.push('hint: '+e.hint); if(e.details)p.push('details: '+e.details); return '<div class="errbox">'+esc(p.length?p.join('\n'):String(e))+'</div>'; }
+function esc(s){ return (s==null) ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>

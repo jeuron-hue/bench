@@ -1,0 +1,14 @@
+#!/bin/sh
+# Scrub gate. No commit passes while bench_scrub.cjs fails, or while it cannot run.
+root=$(git rev-parse --show-toplevel)
+node "$root/bench_scrub.cjs"
+rc=$?
+if [ $rc -eq 1 ]; then
+  echo ""
+  echo "COMMIT BLOCKED: bench_scrub.cjs found banned content (see hits above)."
+  exit 1
+elif [ $rc -ne 0 ]; then
+  echo ""
+  echo "COMMIT BLOCKED: bench_scrub.cjs could not run (exit $rc, see above)."
+  exit 1
+fi
