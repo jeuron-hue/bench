@@ -78,6 +78,14 @@ function loadList() {
   for (const pt of list.patterns) {
     if (!pt || typeof pt.re !== 'string') fail('a pattern entry has no "re" string: ' + p);
   }
+  // Optional. Absent means nothing is allowed anywhere, which fails closed on its own.
+  if (list.allowed === undefined) list.allowed = [];
+  if (!Array.isArray(list.allowed)) fail('the banned list has an "allowed" that is not an array: ' + p);
+  for (const a of list.allowed) {
+    if (!a || typeof a.path !== 'string' || typeof a.text !== 'string' || !a.text.length) {
+      fail('an "allowed" entry needs a path and a non-empty text: ' + p);
+    }
+  }
   return list;
 }
 
@@ -149,6 +157,31 @@ function markupHits(text, lineOf) {
   return out;
 }
 
+/*
+  ALLOWED STRINGS. An exact string permitted in ONE exact repo-relative path, for a credit line
+  that has to carry a name. It is the narrowest exemption the gate has: not a rule lifted, not a
+  file exempted, but that one string blanked in that one file before the rules run. Every rule
+  still applies to the rest of the file, so the same name anywhere else in it fails, and the
+  same string in any other file fails. The strings live in the private list, not here, because
+  they contain the very names this file must never hold.
+
+  Blanked to spaces of the same length, so line numbers and positions of any other hit are
+  unchanged. Counted, and the count prints on every run.
+*/
+let allowedBlanked = 0;
+function blankAllowed(f, text) {
+  for (const a of LIST.allowed) {
+    if (a.path !== f) continue;
+    let i = text.indexOf(a.text);
+    while (i >= 0) {
+      text = text.slice(0, i) + ' '.repeat(a.text.length) + text.slice(i + a.text.length);
+      allowedBlanked++;
+      i = text.indexOf(a.text, i + a.text.length);
+    }
+  }
+  return text;
+}
+
 // ------------------------------------------------------------ the scan
 function fileList() {
   const run = a => git(a).split('\n').filter(Boolean);
@@ -167,8 +200,9 @@ function readScannable(f) {
 
 let hits = 0, scanned = 0, skipped = 0, exempted = 0;
 for (const f of fileList()) {
-  const text = readScannable(f);
-  if (text === null) { skipped++; continue; }
+  const raw = readScannable(f);
+  if (raw === null) { skipped++; continue; }
+  const text = blankAllowed(f, raw);
   scanned++;
 
   const starts = [0];
@@ -205,6 +239,8 @@ for (const f of fileList()) {
 console.log('');
 console.log('scanned ' + scanned + ' file(s), skipped ' + skipped + ' binary, ' +
             markupSuppressed + ' markup tag(s) suppressed, ' +
+            allowedBlanked + ' allowed string(s) blanked, ' +
             exempted + ' name-exempt, ' + hits + ' hit(s)');
 if (PERSON_EXEMPT.size) console.log('name-exempt paths (person rules only): ' + [...PERSON_EXEMPT].join(', '));
+if (LIST.allowed.length) console.log('allowed-string paths (one exact string each): ' + [...new Set(LIST.allowed.map(a => a.path))].join(', '));
 process.exit(hits ? 1 : 0);

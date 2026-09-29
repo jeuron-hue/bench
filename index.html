@@ -65,6 +65,11 @@
 
   .footer{padding:24px;font-size:11px;color:var(--muted);font-family:var(--font-mono);
           text-align:center;}
+  /* The credit line. Same font, size and muted token as the line above it, so it follows the
+     theme with no colour of its own; the link is told apart by its underline, not by a hue. */
+  .footer .credit{margin-top:4px;}
+  .footer a{color:inherit;text-decoration:underline;text-underline-offset:2px;}
+  .footer a:hover{color:var(--text);}
 </style>
 </head>
 <body>
@@ -82,7 +87,9 @@
   </div>
 </div>
 
-<div class="footer">Bench build &middot; local data only</div>
+<div class="footer">Bench build &middot; local data only
+  <div class="credit">© 2026 Gary Chan &middot; <a href="https://github.com/jeuron-hue/bench">Source on GitHub</a></div>
+</div>
 
 <script>
 function syncThemeIcon(t){ const el = document.querySelector('.theme-toggle'); if (el) el.innerHTML = t==='light' ? '&#9728;' : '&#9790;'; }

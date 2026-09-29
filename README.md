@@ -10,9 +10,9 @@ I built three browser tools to replace them, on my own, alongside the day job, w
 
 The dashboard shows each chemist what is on their plate that day and helps them manage their time. The hardest problem was not the schedule. It was people joining and leaving. The first departure showed that one "active" flag was being asked to describe people in very different situations: a trainee who should be given work but not change records, a leaver serving notice who keeps their work but takes on nothing new, and someone already gone whose name must stay on everything they signed. Splitting that flag into independent controls, and checking that no screen confuses them, is most of what the admin console does.
 
-This repository is a working copy of those tools. The pages are the original code. The database is replaced by the browser's own storage, and the people, products and records are invented. Use "Viewing as" in any tool's header to become a trainee, a leaver or someone who has already gone, and see what each tool shows and refuses.
+This repository is a working copy of those tools. The pages are built from the original code, with sign-in and network access replaced. The database is replaced by the browser's own storage, and the people, products and records are invented. Use "Viewing as" in any tool's header to become a trainee, a leaver or someone who has already gone, and see what each tool shows and refuses.
 
-Every rule is covered by automated checks, and a mutation test proves those checks would notice if a rule broke. How that works is below.
+The main rules are covered by automated checks, and a mutation test plants twenty deliberate faults to prove those checks would notice. How that works is below.
 
 ---
 
